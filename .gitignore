@@ -1,0 +1,56 @@
+# Environment & secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+**/venv/
+**/.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Results & generated outputs (large files, not source code)
+batch_eval/results/plots/
+batch_eval/results/trial_log.jsonl
+batch_eval/results/run_log.txt
+
+# Keep these result files (small, useful for reference)
+# batch_eval/results/batch_results.csv
+# batch_eval/results/metrics_summary*.csv
+# batch_eval/results/report.md
+
+# Other project folders not part of this repo
+ocr_pipeline/
+OCR/
+UI/
+backend/
+datasets/
+sm/
+Docs Research/
+*.docx
+sample.py
+samples.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user

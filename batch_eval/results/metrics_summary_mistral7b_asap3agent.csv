@@ -1,0 +1,2 @@
+pipeline,n,qwk,pearson_r,mae,exact_pct,adj_pct,mean_pred,std_pred,mean_human
+MAGIC,100,0.157,0.394,2.02,7.0,29.0,4.21,0.96,2.31
