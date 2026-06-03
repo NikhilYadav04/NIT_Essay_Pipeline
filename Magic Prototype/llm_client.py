@@ -20,8 +20,9 @@ import json
 import re
 
 # ── Module-level config (set once at startup via configure()) ──────────────────
-_BACKEND: str = "gemini"
-_MODEL:   str = "gemini-2.0-flash"
+_BACKEND:             str = "gemini"
+_MODEL:               str = "gemini-2.5-flash"
+_ORCHESTRATOR_MODEL:  str = "gemini-2.5-pro"   # smarter model for orchestrator synthesis
 
 GEMINI_DEFAULTS = [
     "gemini-2.0-flash",
@@ -41,18 +42,22 @@ OLLAMA_DEFAULTS = [
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def configure(backend: str, model: str, api_key: str | None = None) -> None:
+def configure(backend: str, model: str, api_key: str | None = None,
+              orchestrator_model: str | None = None) -> None:
     """
     Call this once at startup before any call_llm() calls.
 
     Args:
-        backend:  "gemini" or "ollama"
-        model:    model name string
-        api_key:  required for gemini, ignored for ollama
+        backend:            "gemini" or "ollama"
+        model:              agent model name (used for all 5 specialist agents)
+        api_key:            required for gemini, ignored for ollama
+        orchestrator_model: optional separate model for orchestrator synthesis
+                            defaults to same as model if not provided
     """
-    global _BACKEND, _MODEL
+    global _BACKEND, _MODEL, _ORCHESTRATOR_MODEL
     _BACKEND = backend.lower()
     _MODEL   = model
+    _ORCHESTRATOR_MODEL = orchestrator_model or model
 
     if _BACKEND == "gemini":
         try:
@@ -60,7 +65,7 @@ def configure(backend: str, model: str, api_key: str | None = None) -> None:
             if not api_key:
                 raise ValueError("api_key is required for Gemini backend")
             genai.configure(api_key=api_key)
-            print(f"  [LLM] ✅ Gemini configured  →  model: {_MODEL}")
+            print(f"  [LLM] ✅ Gemini configured  →  agents: {_MODEL}  |  orchestrator: {_ORCHESTRATOR_MODEL}")
         except ImportError:
             raise ImportError("Run: pip install google-generativeai")
 
@@ -73,12 +78,27 @@ def configure(backend: str, model: str, api_key: str | None = None) -> None:
 
 def call_llm(prompt: str, label: str) -> dict:
     """
-    Send a prompt to the configured backend.
+    Send a prompt using the agent model (gemini-2.5-flash).
     Returns {"score": int, "examiner_comment": str}.
     Never raises — returns score=0 on any error.
     """
     if _BACKEND == "gemini":
-        return _call_gemini(prompt, label)
+        return _call_gemini(prompt, label, model=_MODEL)
+    elif _BACKEND == "ollama":
+        return _call_ollama(prompt, label)
+    else:
+        return {"score": 0, "examiner_comment": f"Error: unconfigured backend '{_BACKEND}'"}
+
+
+def call_llm_orchestrator(prompt: str, label: str = "Orchestrator") -> dict:
+    """
+    Send a prompt using the orchestrator model (gemini-2.5-pro).
+    Falls back to agent model for ollama (no separate orchestrator model there).
+    Returns {"score": int, "examiner_comment": str}.
+    Never raises — returns score=0 on any error.
+    """
+    if _BACKEND == "gemini":
+        return _call_gemini(prompt, label, model=_ORCHESTRATOR_MODEL)
     elif _BACKEND == "ollama":
         return _call_ollama(prompt, label)
     else:
@@ -92,11 +112,11 @@ def get_backend_info() -> dict:
 
 # ── Gemini Backend ─────────────────────────────────────────────────────────────
 
-def _call_gemini(prompt: str, label: str) -> dict:
+def _call_gemini(prompt: str, label: str, model: str | None = None) -> dict:
     try:
         import google.generativeai as genai
-        model    = genai.GenerativeModel(_MODEL)
-        response = model.generate_content(prompt)
+        m        = genai.GenerativeModel(model or _MODEL)
+        response = m.generate_content(prompt)
         raw      = response.text.strip()
         return _parse_response(raw, label)
     except Exception as e:

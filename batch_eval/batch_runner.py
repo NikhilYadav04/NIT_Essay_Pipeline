@@ -247,7 +247,9 @@ def parse_args():
     parser.add_argument("--backend",  choices=["gemini", "ollama"], default="ollama",
                         help="LLM backend (default: ollama)")
     parser.add_argument("--model",    type=str, default=None,
-                        help="Model override (default: ollama→llama3.1:8b  gemini→gemini-2.0-flash)")
+                        help="Model override (default: ollama→llama3.1:8b  gemini→gemini-2.5-flash)")
+    parser.add_argument("--orchestrator-model", type=str, default=None, dest="orchestrator_model",
+                        help="Separate model for orchestrator (default: gemini-2.5-pro for gemini backend)")
     parser.add_argument("--pipeline", choices=["both", "magic", "autoscore"], default="both",
                         help="Which pipeline(s) to run (default: both)")
     parser.add_argument("--limit",    type=int, default=None,
@@ -267,14 +269,15 @@ def main():
     args = parse_args()
 
     # ── Resolve model ──────────────────────────────────────────────────────────
-    default_models = {"gemini": "gemini-2.0-flash", "ollama": "llama3.1:8b"}
+    default_models = {"gemini": "gemini-2.5-flash", "ollama": "llama3.1:8b"}
     model = args.model or default_models[args.backend]
+    orchestrator_model = args.orchestrator_model or ("gemini-2.5-pro" if args.backend == "gemini" else None)
 
     print("\n" + "=" * 65)
     print("  MAGIC vs AutoSCORE — Batch Evaluation Pipeline")
     print("=" * 65)
     print(f"  Backend  : {args.backend.upper()}")
-    print(f"  Model    : {model}")
+    print(f"  Model    : {model}  (orchestrator: {orchestrator_model or model})")
     print(f"  Pipeline : {args.pipeline}")
     print(f"  Rubric   : {args.rubric} ({'3 agents' if args.rubric == 'asap' else '5 agents'})")
     print(f"  Sleep    : {args.sleep}s between essays")
@@ -362,7 +365,8 @@ def main():
         )
         llm_mod = sys.modules.get("llm_client")
         if llm_mod:
-            llm_mod.configure(backend=args.backend, model=model, api_key=api_key)
+            llm_mod.configure(backend=args.backend, model=model, api_key=api_key,
+                              orchestrator_model=orchestrator_model)
         magic_app = magic_module.build_graph(rubric=args.rubric)
         print(f"[3a] MAGIC graph compiled ✓ (rubric={args.rubric})")
 

@@ -5,7 +5,7 @@
 ## 1. Title
 
 **Evaluating MAGIC Multi-Agent Pipeline for Automated Essay Scoring on the ASAP Dataset**
-*A comparative study of model selection (LLaMA 3.1:8b vs Mistral:7b) and rubric design (5-agent GRE vs 3-agent ASAP) on 100 student essays*
+*A comparative study of model selection (LLaMA 3.1:8b vs Mistral:7b vs Gemma3:12b vs Gemma3:4b) and rubric design (5-agent GRE vs 3-agent ASAP) on 100 student essays*
 
 ---
 
@@ -50,7 +50,24 @@ Percentage of essays where the AI score was within 1 grade point of the human. T
 
 ---
 
-## 3. Complete Analysis of All 4 Runs
+## 3. Pipeline Execution Notes
+
+### AutoScore Errors
+Across several runs, the AutoScore pipeline encountered a runtime error — `module 'llm_client' has no attribute 'call_llm_raw'` — which caused all 100 AutoScore evaluations to fail silently while MAGIC continued running successfully. This is a module loading isolation issue: when the batch runner dynamically loads both pipelines, the shared `llm_client` module cached from the MAGIC load does not expose the `call_llm_raw` method that AutoScore requires. As a result, the gemma3:12b and gemma3:4b runs contain only MAGIC pipeline scores — AutoScore metrics for these runs are not available. The 4-run comparison in Section 3 therefore focuses exclusively on MAGIC pipeline performance across all models. AutoScore results are available for the llama3.1:8b and mistral:7b runs only.
+
+### Run Validity Summary
+| Run | MAGIC Valid | AutoScore Valid | Notes |
+|-----|------------|-----------------|-------|
+| LLaMA 3.1:8b + GRE 5-agent | 100/100 | 100/100 | Full run |
+| LLaMA 3.1:8b + ASAP 3-agent | 100/100 | 100/100 | Full run |
+| Mistral:7b + GRE 5-agent | 100/100 | 100/100 | Full run |
+| Mistral:7b + ASAP 3-agent | 100/100 | 100/100 | Full run |
+| Gemma3:4b + GRE 5-agent | 100/100 | 0/100 | AutoScore failed — llm_client error |
+| Gemma3:12b + GRE 5-agent | 100/100 | 0/100 | AutoScore failed — llm_client error |
+
+---
+
+## 4. Complete Analysis of All Runs
 
 ---
 
@@ -130,7 +147,47 @@ The 5 detailed rubric agents each call the same underlying Mistral model, which 
 
 ---
 
-## 4. Dataset Information
+### Run 5 — MAGIC 5-Agent GRE Rubric + Gemma3:4b
+**QWK: 0.188 | r: 0.413 | MAE: 1.070 | Exact: 28% | ±1: 79%**
+*(AutoScore: 0/100 valid — pipeline error, MAGIC only)*
+
+**Overview:**
+Gemma3:4b is a 4 billion parameter model from Google DeepMind — the smallest model tested in this study. At 4B parameters it is roughly half the size of llama3.1:8b and mistral:7b. This run was designed to explore the lower bound of model capability for this task and to test whether Google's Gemma architecture had any inherent advantage over Meta's LLaMA for structured rubric-following despite the smaller size.
+
+**Scatter Plot Analysis:**
+The scatter plot shows predictions heavily concentrated at score 3, with very little spread across the rest of the scale. The diagonal alignment is weak — the model treats nearly all essays as average regardless of quality. However, ±1% of 79% is actually the second best of all runs, which means while the model rarely gets the exact score right, it stays within 1 grade most of the time simply by defaulting to the middle of the scale. This is a statistical artefact of the dataset distribution rather than genuine scoring ability.
+
+**Confusion Matrix Analysis:**
+Almost every prediction lands at score 2 or 3. Score 0 essays are predicted as 2–3, score 4 essays are predicted as 3 — the model essentially collapses the entire scoring range to a 2–3 band. The diagonal shows 37 correct at score 2 and some at score 3, but this is driven by the fact that most essays in the ASAP dataset genuinely score 2–3, so defaulting to that range produces coincidental accuracy. There is almost no activity in columns 0, 1, 4, 5, or 6 — the model cannot use the extremes of the scale at all.
+
+**Why This Happened:**
+At 4B parameters the model lacks sufficient capacity to process the detailed 5-agent GRE rubric and produce calibrated scores. The model takes the safest path — predicting the statistical centre of the scale — rather than engaging with the rubric criteria. This is a capacity limitation, not a bias issue.
+
+**Assessment:** Poor to Fair. ±1% of 79% looks good on paper but is misleading — it reflects scale collapse rather than scoring skill. Not recommended for this task.
+
+---
+
+### Run 6 — MAGIC 5-Agent GRE Rubric + Gemma3:12b *(Notable Result)*
+**QWK: 0.346 | r: 0.413 | MAE: 0.980 | Exact: 31% | ±1: 80%**
+*(AutoScore: 0/100 valid — pipeline error, MAGIC only)*
+
+**Overview:**
+Gemma3:12b is a 12 billion parameter model — the largest local model tested in this study. It took approximately 6 hours to complete the 100-essay run on local CPU hardware, compared to roughly 2–3 hours for the 8B models. Despite the longer runtime, this run produced the most interesting behavioural results of the entire study, particularly at the low end of the scoring scale.
+
+**Scatter Plot Analysis:**
+The best scatter plot alignment of the Gemma models, with predictions spread across scores 0–4. Crucially, the plot shows dots at score 0 and score 1 predictions — the only model in the entire study to score essays in this range with any consistency. The diagonal alignment is reasonable for scores 2–3, with visible under-scoring at score 3–4. Score 6 essays are under-scored significantly (predicted 2–3), suggesting the model still struggles with the upper extreme.
+
+**Confusion Matrix Analysis:**
+The most balanced confusion matrix of all runs. 22 correct at score 2, 19 correct at score 3, and 4 correct at score 4. Critically, score 0 essays are predicted as 0 and 1 in several cases (1 exact + 10 predicted as 1) — this is the first and only model to partially overcome leniency bias at the low end. Score 3 essays show consistent under-scoring (19 predicted as 2), continuing the pattern seen in other models. The matrix is more spread than the 4B model, covering columns 0 through 4 meaningfully.
+
+**Why This Is Significant:**
+Gemma3:12b's ability to assign scores of 0 and 1 suggests that Google's training approach for Gemma at larger sizes produces a model less prone to the reciprocity and leniency bias described in the research literature. This is a meaningful finding — it indicates that model architecture and training data choices, not just parameter count, influence scoring bias. However, the overall QWK of 0.346 is still below llama3.1:8b's 0.396, meaning the low-end calibration comes at the cost of some mid-range accuracy.
+
+**Assessment:** Fair agreement, with the unique distinction of being the only model to partially overcome leniency bias. QWK second best after llama3.1:8b. Worth retesting with the strict instruction changes described in Section 5.
+
+---
+
+## 5. Dataset Information
 
 **Dataset: ASAP (Automated Student Assessment Prize)**
 - Originally released by Kaggle in partnership with the Hewlett Foundation
@@ -149,12 +206,14 @@ The 5 detailed rubric agents each call the same underlying Mistral model, which 
 
 ### Overall Rankings
 
-| Rank | Configuration | QWK | MAE | ±1% | Grade |
-|------|--------------|-----|-----|-----|-------|
-| 1 | LLaMA 3.1:8b + GRE 5-agent | **0.396** | **0.820** | **77%** | Fair–Moderate |
-| 2 | LLaMA 3.1:8b + ASAP 3-agent | 0.220 | 1.110 | 69% | Fair |
-| 3 | Mistral:7b + ASAP 3-agent | 0.157 | 2.020 | 29% | Poor |
-| 4 | Mistral:7b + GRE 5-agent | 0.108 | 2.030 | 30% | Poor |
+| Rank | Configuration | QWK | MAE | ±1% | AutoScore | Grade |
+|------|--------------|-----|-----|-----|-----------|-------|
+| 1 | LLaMA 3.1:8b + GRE 5-agent | **0.396** | **0.820** | 77% | ✓ | Fair–Moderate |
+| 2 | Gemma3:12b + GRE 5-agent | 0.346 | 0.980 | **80%** | ✗ error | Fair |
+| 3 | LLaMA 3.1:8b + ASAP 3-agent | 0.220 | 1.110 | 69% | ✓ | Fair |
+| 4 | Gemma3:4b + GRE 5-agent | 0.188 | 1.070 | 79% | ✗ error | Poor–Fair |
+| 5 | Mistral:7b + ASAP 3-agent | 0.157 | 2.020 | 29% | ✓ | Poor |
+| 6 | Mistral:7b + GRE 5-agent | 0.108 | 2.030 | 30% | ✓ | Poor |
 
 ---
 

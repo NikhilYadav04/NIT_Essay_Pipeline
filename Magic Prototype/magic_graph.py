@@ -211,7 +211,7 @@ def orchestrator_node(state: MAGICState) -> dict:
         domain_feedbacks=domain_feedbacks,
     )
 
-    result = llm_client.call_llm(orchestrator_prompt, "Orchestrator")
+    result = llm_client.call_llm_orchestrator(orchestrator_prompt, "Orchestrator")
 
     return {
         "orchestrator_score": result["score"],
