@@ -1,10 +1,4 @@
-# NIT Summer Internship — Automated Essay Scoring Research
-
-**Intern:** Nikhil Yadav  
-**Project:** Comparative Study of Multi-Agent LLM Pipelines for Automated Essay Scoring (AES)  
-**Repository Purpose:** Research implementation, experimentation, and evaluation of two AES pipeline architectures using Large Language Models.
-
----
+# Automated Essay Scoring Research
 
 ## Overview
 
