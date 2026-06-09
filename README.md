@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the full research implementation produced during the summer internship. The project investigates whether multi-agent LLM architectures can produce accurate, interpretable, and rubric-aligned essay scores comparable to human graders.
+This repository contains the current progress for the Essay Scoring System. The project investigates whether multi-agent LLM architectures can produce accurate, interpretable, and rubric-aligned essay scores comparable to human graders.
 
 Two pipeline architectures are implemented and benchmarked:
 
