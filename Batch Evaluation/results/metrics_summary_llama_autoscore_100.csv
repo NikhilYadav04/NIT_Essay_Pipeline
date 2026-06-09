@@ -1,0 +1,2 @@
+pipeline,n,qwk,pearson_r,mae,exact_pct,adj_pct,mean_pred,std_pred,mean_human
+AutoSCORE,99,0.41,0.546,0.747,44.4,82.8,2.31,0.58,2.31

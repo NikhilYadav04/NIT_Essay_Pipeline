@@ -1,6 +1,7 @@
 from prompts.base import BasePrompts
 from prompts.agents import GREAgentPrompts
 
+
 class GREOrchestratorPrompts(BasePrompts):
     system_prompt = """
 You are an expert professional grader who scores student essays tagged <student_essay> based on other expert grader's scores and reasoning.
@@ -30,8 +31,6 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
 
 """
 
-    
-
     @classmethod
     def dump_prompts(cls) -> dict:
         return {
@@ -40,9 +39,16 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
         }
 
     @classmethod
-    def format_prompt_inference(cls, grading_instruction: dict, domain_scores: list[int], domain_feedbacks: list[str]) -> str:
+    def format_prompt_inference(
+        cls,
+        grading_instruction: dict,
+        domain_scores: list[int],
+        domain_feedbacks: list[str],
+    ) -> str:
         expert_grader_scores_and_reasoning = ""
-        for domain_score, domain_feedback, aspect_rubric in zip(domain_scores, domain_feedbacks, GREAgentPrompts.aspect_rubrics):
+        for domain_score, domain_feedback, aspect_rubric in zip(
+            domain_scores, domain_feedbacks, GREAgentPrompts.aspect_rubrics
+        ):
             aspect_name = aspect_rubric[2]
             expert_grader_scores_and_reasoning += f"""
 <expert_grader_judgement>
@@ -60,10 +66,12 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
             # task_directions=grading_instruction["task_directions"],
             output_format=cls.output_format,
             min_score=0,
-            max_score=6
+            max_score=6,
         )
         input_prompt_formatted = cls.input_prompt.format(
             essay_text=grading_instruction["essay_text"]
         )
 
-        return cls.alpaca_prompt.format(system_prompt_formatted, input_prompt_formatted, "")
+        return cls.alpaca_prompt.format(
+            system_prompt_formatted, input_prompt_formatted, ""
+        )

@@ -33,31 +33,31 @@ Your output must be a valid JSON object with EXACTLY this structure:
         "trait_1_task_response": {
             "score": integer between 0 and 6,
             "rubric_match": "brief explanation of which rubric descriptor matches",
-            "evidence_used": "which specific JSON field(s) led to this score",
+            "evidence_used": "name the JSON field(s) only, e.g. 'task_response.addressed, task_response.thesis'",
             "feedback": "specific actionable feedback for the student on this trait"
         },
         "trait_2_argument_quality": {
             "score": integer between 0 and 6,
             "rubric_match": "brief explanation of which rubric descriptor matches",
-            "evidence_used": "which specific JSON field(s) led to this score",
+            "evidence_used": "name the JSON field(s) only, e.g. 'argument_quality.examples_found, argument_quality.claim_support'",
             "feedback": "specific actionable feedback for the student on this trait"
         },
         "trait_3_organisation": {
             "score": integer between 0 and 6,
             "rubric_match": "brief explanation of which rubric descriptor matches",
-            "evidence_used": "which specific JSON field(s) led to this score",
+            "evidence_used": "name the JSON field(s) only, e.g. 'organisation.has_introduction, organisation.has_conclusion'",
             "feedback": "specific actionable feedback for the student on this trait"
         },
         "trait_4_language_style": {
             "score": integer between 0 and 6,
             "rubric_match": "brief explanation of which rubric descriptor matches",
-            "evidence_used": "which specific JSON field(s) led to this score",
+            "evidence_used": "name the JSON field(s) only, e.g. 'language_style.vocabulary_range, language_style.sentence_variety'",
             "feedback": "specific actionable feedback for the student on this trait"
         },
         "trait_5_grammar_mechanics": {
             "score": integer between 0 and 6,
             "rubric_match": "brief explanation of which rubric descriptor matches",
-            "evidence_used": "which specific JSON field(s) led to this score",
+            "evidence_used": "name the JSON field(s) only, e.g. 'grammar_mechanics.error_count, grammar_mechanics.error_types'",
             "feedback": "specific actionable feedback for the student on this trait"
         }
     },

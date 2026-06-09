@@ -1,5 +1,6 @@
 from prompts.base import BasePrompts
 
+
 class GREAgentPrompts(BasePrompts):
     aspect_1_rubric = """
 Aspect 1: Quality of the response to the prompt instructions
@@ -54,8 +55,25 @@ Score 1: The essay contains pervasive errors in grammar, usage, or mechanics tha
 Score 0: The essay is off topic (i.e., provides no evidence of an attempt to respond to the assigned topic), written in a foreign language, merely copies the topic, consists of only keystroke characters, or is illegible or nonverbal.
 """
 
-    aspect_rubrics = [("argumentative", aspect_1_rubric, "Aspect 1: Quality of the response to the prompt instructions"), ("argumentative", aspect_2_rubric, "Aspect 2: Considering the complexities of the issue"), ("argumentative", aspect_3_rubric, "Aspect 3: Organizing, developing, and expressing ideas"), ("vocabulary", aspect_4_rubric, "Aspect 4: Vocabulary and sentence variety"), ("grammar", aspect_5_rubric, "Aspect 5: Grammar and mechanics")]
-
+    aspect_rubrics = [
+        (
+            "argumentative",
+            aspect_1_rubric,
+            "Aspect 1: Quality of the response to the prompt instructions",
+        ),
+        (
+            "argumentative",
+            aspect_2_rubric,
+            "Aspect 2: Considering the complexities of the issue",
+        ),
+        (
+            "argumentative",
+            aspect_3_rubric,
+            "Aspect 3: Organizing, developing, and expressing ideas",
+        ),
+        ("vocabulary", aspect_4_rubric, "Aspect 4: Vocabulary and sentence variety"),
+        ("grammar", aspect_5_rubric, "Aspect 5: Grammar and mechanics"),
+    ]
 
     argumentative_system_prompt = """
 You are an expert professional grader who scores student essays tagged <student_essay> based on a rubric. 
@@ -148,7 +166,7 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
 
 {output_format}
 """
-    
+
     @classmethod
     def dump_prompts(cls) -> dict:
         return {
@@ -160,7 +178,12 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
         }
 
     @classmethod
-    def format_prompt_inference(cls, grading_instruction: dict, agent_rubric_type: str, current_aspect_rubric: str) -> str:
+    def format_prompt_inference(
+        cls,
+        grading_instruction: dict,
+        agent_rubric_type: str,
+        current_aspect_rubric: str,
+    ) -> str:
         essay_text = grading_instruction["essay_text"]
         if agent_rubric_type == "vocabulary":
             system_prompt_formatted = cls.vocabulary_system_prompt.format(
@@ -168,7 +191,7 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
                 prompt=grading_instruction["prompt"],
                 output_format=cls.output_format,
                 min_score=0,
-                max_score=6
+                max_score=6,
             )
         elif agent_rubric_type == "grammar":
             system_prompt_formatted = cls.grammar_system_prompt.format(
@@ -176,7 +199,7 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
                 prompt=grading_instruction["prompt"],
                 output_format=cls.output_format,
                 min_score=0,
-                max_score=6
+                max_score=6,
             )
         else:
             system_prompt_formatted = cls.argumentative_system_prompt.format(
@@ -184,10 +207,10 @@ Remember, a low score isn't harmful to the student. Rather, an accurate match to
                 prompt=grading_instruction["prompt"],
                 output_format=cls.output_format,
                 min_score=0,
-                max_score=6
+                max_score=6,
             )
-        input_prompt_formatted = cls.input_prompt.format(
-            essay_text=essay_text
-        )
+        input_prompt_formatted = cls.input_prompt.format(essay_text=essay_text)
 
-        return cls.alpaca_prompt.format(system_prompt_formatted, input_prompt_formatted, "")
+        return cls.alpaca_prompt.format(
+            system_prompt_formatted, input_prompt_formatted, ""
+        )

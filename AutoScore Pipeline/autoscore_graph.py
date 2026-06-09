@@ -178,8 +178,11 @@ class AutoSCOREState(TypedDict):
 def parse_json(raw: str, label: str) -> dict:
     """
     Parses JSON from LLM raw response.
-    Handles markdown fences, leading text, and partial wrapping.
+    Handles markdown fences, leading text, truncated/broken strings from
+    models that paste evidence dicts inline instead of citing field names.
     """
+    import re
+
     # Strip markdown fences
     cleaned = llm_client.strip_markdown_fences(raw)
 
@@ -189,8 +192,7 @@ def parse_json(raw: str, label: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # Fallback: find outermost JSON object
-    import re
+    # Fallback 1: find outermost JSON object
     match = re.search(r'\{.*\}', cleaned, re.DOTALL)
     if match:
         try:
@@ -198,8 +200,51 @@ def parse_json(raw: str, label: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    print(f"  [!] Could not parse JSON for {label}. Raw snippet:")
-    print(f"      {raw[:200]}...")
+    # Fallback 2: the model broke the JSON by embedding a raw dict inside a
+    # string value (e.g. "evidence_used": "key": true, ...).
+    try:
+        # Replace problematic string values: "key": "...: ..., ..."  → "key": "see evidence"
+        sanitized = re.sub(
+            r'("evidence_used"\s*:\s*)"([^"]*?(?:"[^"]*?)*)"',
+            r'\1"see evidence record"',
+            cleaned,
+            flags=re.DOTALL,
+        )
+        return json.loads(sanitized)
+    except (json.JSONDecodeError, Exception):
+        pass
+
+    # Fallback 3: extract scores with regex and reconstruct a minimal dict
+    print(f"  [!] Could not parse JSON for {label} — attempting score extraction.")
+    trait_keys = [
+        "trait_1_task_response",
+        "trait_2_argument_quality",
+        "trait_3_organisation",
+        "trait_4_language_style",
+        "trait_5_grammar_mechanics",
+    ]
+    trait_scores = {}
+    for key in trait_keys:
+        m = re.search(rf'"{key}".*?"score"\s*:\s*(\d)', cleaned, re.DOTALL)
+        if m:
+            trait_scores[key] = {"score": int(m.group(1)), "feedback": "Evaluation complete.", "rubric_match": "", "evidence_used": ""}
+
+    holistic = re.search(r'"holistic_score"\s*:\s*(\d)', cleaned)
+    holistic_score = int(holistic.group(1)) if holistic else -1
+
+    feedback_m = re.search(r'"overall_feedback"\s*:\s*"(.*?)"(?:\s*[,}])', cleaned, re.DOTALL)
+    overall_feedback = feedback_m.group(1) if feedback_m else ""
+
+    if trait_scores:
+        print(f"  [~] Recovered {len(trait_scores)}/5 trait scores via regex.")
+        return {
+            "trait_scores": trait_scores,
+            "holistic_score": holistic_score,
+            "holistic_reasoning": "",
+            "overall_feedback": overall_feedback,
+        }
+
+    print(f"  [!] Complete parse failure for {label}. Raw snippet: {raw[:200]}")
     return {}
 
 
