@@ -192,7 +192,7 @@ Reference papers and project documentation used throughout the research.
 | `MAGIC_Paper.pdf` | Original MAGIC multi-agent AES paper (primary reference) |
 | `AutoScore_Paper.pdf` | AutoScore methodology paper (baseline reference) |
 | `LLM_Strict_Grading_Research.pdf` | Research on strict rubric-following in LLM graders |
-| `Research_Survey.pdf` | Broader AES literature survey |
+| `Research_Survey.pdf` | RES ( Roundtable Essay Scoring ) methodology paper (baseline reference) |
 | `MAGIC_Pipeline_AES_Report.docx` | Deep Analysis of MAGIC on various LLM Models |
 | `MAGIC_vs_AutoScore_Comparison.docx` | Comparative analysis of both architectures |
 | `Essay_Evaluation_Pipeline_Overview.docx` | High-level pipeline design documentation |
