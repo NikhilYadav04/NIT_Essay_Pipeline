@@ -26,6 +26,33 @@ NIT_Essay_Pipeline/
 
 ---
 
+## Demo
+| | |
+|---|---|
+| 🌐 **UI Demo Videos**  | [Google Drive Folder](https://drive.google.com/drive/folders/1ZiLQr6RZ7Ll0RjQRB4eiRYo0WADfWKs5?usp=sharing) |
+
+<br>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/0ccf346a-647d-465d-b879-d6c02092b8ce" width="48%" alt="EssayIQ Submission Page" />
+  &nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/f74f9d3b-4ea4-4270-abb1-0820b53be6ed" width="48%" alt="EssayIQ Results Page" />
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a3c2b352-39f3-4ff4-bc06-e7d53bfa375d" width="48%" alt="EssayIQ Loading Screen" />
+  &nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/450d0830-691a-4ddd-aa19-01f3a9766d7a" width="48%" alt="EssayIQ Score Breakdown" />
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/1572f263-0c3d-4e79-9fe8-4007b58e0414" width="48%" alt="EssayIQ Agent Evaluation" />
+  &nbsp;&nbsp;
+ <img src="https://github.com/user-attachments/assets/12c82b83-4c28-4c7a-b48e-b2fedd366e9c" width="48%" alt="EssayIQ Holistic Assessment" />
+</p>
+
+
+---
 ## Magic Pipeline
 
 **Architecture:** Multi-Agent LangGraph system implementing the MAGIC (Multi-Agent Intelligent Grading and Critique) framework.
