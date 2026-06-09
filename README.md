@@ -26,6 +26,7 @@ NIT_Essay_Pipeline/
 ├── Magic Pipeline/          # Multi-Agent Intelligent Grading & Critique (MAGIC)
 ├── AutoScore Pipeline/      # Single-agent AutoScore baseline
 ├── Batch Evaluation/        # Automated benchmarking and metric analysis
+├── Datasets/                # Essay datasets used for evaluation
 └── Docs Research/           # Research papers and project documentation
 ```
 
@@ -174,6 +175,24 @@ Reference papers and project documentation used throughout the research.
 | `MAGIC_Pipeline_AES_Report.docx` | Project implementation report |
 | `MAGIC_vs_AutoScore_Comparison.docx` | Comparative analysis of both architectures |
 | `Essay_Evaluation_Pipeline_Overview.docx` | High-level pipeline design documentation |
+
+---
+
+## Datasets
+
+Essay datasets used to benchmark both pipelines against human gold-standard scores.
+
+| File | Essays | Source | Prompt Type |
+|---|---|---|---|
+| `ASAP_100.csv` | 100 | ASAP (Automated Student Assessment Prize) | Short student essays, multiple prompts |
+| `GRE_100.csv` | 100 | GRE Analytical Writing dataset | Long-form argumentative essays |
+
+Both datasets contain:
+- **Essay text** — the full student essay
+- **Human score** — gold-standard score assigned by trained human graders (0–6 scale)
+- **Prompt** — the essay question/task the student responded to
+
+These are used by the **Batch Evaluation** pipeline to compute QWK and other agreement metrics between LLM-predicted scores and human scores.
 
 ---
 

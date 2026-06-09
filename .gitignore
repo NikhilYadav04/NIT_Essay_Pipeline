@@ -33,7 +33,6 @@ ocr_pipeline/
 OCR/
 UI/
 backend/
-Datasets/
 Demo/
 sm/
 sample.py
