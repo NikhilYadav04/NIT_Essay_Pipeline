@@ -193,7 +193,7 @@ Reference papers and project documentation used throughout the research.
 | `AutoScore_Paper.pdf` | AutoScore methodology paper (baseline reference) |
 | `LLM_Strict_Grading_Research.pdf` | Research on strict rubric-following in LLM graders |
 | `Research_Survey.pdf` | Broader AES literature survey |
-| `MAGIC_Pipeline_AES_Report.docx` | Project implementation report |
+| `MAGIC_Pipeline_AES_Report.docx` | Deep Analysis of MAGIC on various LLM Models |
 | `MAGIC_vs_AutoScore_Comparison.docx` | Comparative analysis of both architectures |
 | `Essay_Evaluation_Pipeline_Overview.docx` | High-level pipeline design documentation |
 
