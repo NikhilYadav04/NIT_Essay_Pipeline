@@ -149,56 +149,83 @@ def plot_confusion_hm(ax, human, pred, label, color):
         spine.set_edgecolor("#333355")
 
 
-def plot_metric_bars(ax, magic_m: dict, auto_m: dict):
-    """Side-by-side bar chart for QWK, Pearson, Exact%."""
+def plot_metric_bars(ax, metrics_dict: dict):
+    """Side-by-side bar chart for QWK, Pearson, Exact%, and ±1%."""
     metrics  = ["QWK", "Pearson r", "Exact %", "±1 %"]
-    magic_v  = [magic_m["qwk"], magic_m["pearson_r"],
-                magic_m["exact_pct"] / 100, magic_m["adj_pct"] / 100]
-    auto_v   = [auto_m["qwk"],  auto_m["pearson_r"],
-                auto_m["exact_pct"] / 100, auto_m["adj_pct"] / 100]
-
     x      = np.arange(len(metrics))
-    width  = 0.35
 
-    bars1 = ax.bar(x - width/2, magic_v, width, label="MAGIC",     color=BLUE,  alpha=0.88, edgecolor="white", linewidth=0.5)
-    bars2 = ax.bar(x + width/2, auto_v,  width, label="AutoSCORE", color=GREEN, alpha=0.88, edgecolor="white", linewidth=0.5)
+    pipelines = list(metrics_dict.keys())
+    num_pipelines = len(pipelines)
+
+    # We dynamically calculate width and positions
+    width = 0.8 / num_pipelines
+
+    colors = {
+        "MAGIC": BLUE,
+        "AutoSCORE": GREEN,
+        "Hybrid": RED
+    }
+
+    for idx, name in enumerate(pipelines):
+        m = metrics_dict[name]
+        v = [m["qwk"], m["pearson_r"], m["exact_pct"] / 100, m["adj_pct"] / 100]
+        pos = x - 0.4 + (idx * width) + (width / 2)
+        color = colors.get(name, "#cccccc")
+        bars = ax.bar(pos, v, width, label=name, color=color, alpha=0.88, edgecolor="white", linewidth=0.5)
+
+        # Add labels
+        for bar in bars:
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.015,
+                    f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color=color)
 
     ax.set_xticks(x)
     ax.set_xticklabels(metrics, color="white", fontsize=11)
     ax.set_ylim(0, 1.12)
     ax.set_ylabel("Score / Rate", fontsize=11, color="white")
-    ax.set_title("MAGIC vs AutoSCORE — Key Metrics", fontsize=13, fontweight="bold", color="white", pad=12)
+    ax.set_title("Pipeline Comparison — Key Metrics", fontsize=13, fontweight="bold", color="white", pad=12)
     ax.legend(framealpha=0.3, labelcolor="white", facecolor="#1e1e2e", edgecolor="#333355")
     ax.tick_params(colors="white")
     ax.axhline(0.7, color="white", linestyle=":", alpha=0.3, linewidth=1)
-
-    for bar in bars1:
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.015,
-                f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color=BLUE)
-    for bar in bars2:
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.015,
-                f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color=GREEN)
 
     for spine in ax.spines.values():
         spine.set_edgecolor("#333355")
 
 
 def plot_score_distribution(ax, df: pd.DataFrame):
-    """Overlapping histograms of human, MAGIC, AutoSCORE score distributions."""
+    """Overlapping histograms of human, MAGIC, AutoSCORE, Hybrid score distributions."""
     bins = np.arange(-0.5, 7.5, 1)
 
     human_scores = np.clip(df["human_score_norm"].values, 0, 6)
     ax.hist(human_scores,   bins=bins, alpha=0.55, color="white",  label="Human",     edgecolor="#333355")
 
-    valid_magic = df[df["magic_score"] >= 0]
-    if len(valid_magic) > 0:
-        magic_scores = np.clip(valid_magic["magic_score"].values, 0, 6)
-        ax.hist(magic_scores, bins=bins, alpha=0.55, color=BLUE,   label="MAGIC",     edgecolor="#333355")
+    if "magic_score" in df.columns:
+        valid_magic = df[df["magic_score"] >= 0]
+        if len(valid_magic) > 0:
+            magic_scores = np.clip(valid_magic["magic_score"].values, 0, 6)
+            ax.hist(magic_scores, bins=bins, alpha=0.45, color=BLUE,   label="MAGIC",     edgecolor="#333355")
 
-    valid_auto = df[df["autoscore_holistic"] >= 0]
-    if len(valid_auto) > 0:
-        auto_scores = np.clip(valid_auto["autoscore_holistic"].values, 0, 6)
-        ax.hist(auto_scores,  bins=bins, alpha=0.55, color=GREEN,  label="AutoSCORE", edgecolor="#333355")
+    if "autoscore_holistic" in df.columns:
+        valid_auto = df[df["autoscore_holistic"] >= 0]
+        if len(valid_auto) > 0:
+            auto_scores = np.clip(valid_auto["autoscore_holistic"].values, 0, 6)
+            ax.hist(auto_scores,  bins=bins, alpha=0.45, color=GREEN,  label="AutoSCORE", edgecolor="#333355")
+
+    if "hybrid_score" in df.columns:
+        valid_hybrid = df[df["hybrid_score"] >= 0]
+        # Filter out failed SRCE essays
+        if "hybrid_srce_fields" in df.columns:
+            valid_hybrid = valid_hybrid[valid_hybrid["hybrid_srce_fields"] > 0]
+        else:
+            known_failed = {
+                "AAAVUP14319000159461", "AAAVUP14319000159396", "AAAVUP14319000159373", 
+                "AAAVUP14319000159293", "AAAVUP14319000157959", "AAAVUP14319000157815", 
+                "AAAVUP14319000157200", "AAAVUP14319000156063"
+            }
+            valid_hybrid = valid_hybrid[~valid_hybrid["essay_id"].isin(known_failed)]
+            
+        if len(valid_hybrid) > 0:
+            hybrid_scores = np.clip(valid_hybrid["hybrid_score"].values, 0, 6)
+            ax.hist(hybrid_scores, bins=bins, alpha=0.45, color=RED,    label="Hybrid",    edgecolor="#333355")
 
     ax.set_xlabel("Score (0–6)", fontsize=11, color="white")
     ax.set_ylabel("Count", fontsize=11, color="white")
@@ -214,7 +241,7 @@ def plot_score_distribution(ax, df: pd.DataFrame):
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze batch_results.csv")
-    parser.add_argument("--pipeline", choices=["both", "magic", "autoscore"], default="both")
+    parser.add_argument("--pipeline", choices=["both", "magic", "autoscore", "hybrid", "all"], default="both")
     parser.add_argument("--tag", default="", help="Label for this run e.g. mistral7b, llama31_100")
     args = parser.parse_args()
 
@@ -230,15 +257,42 @@ def main():
     print(f"\nLoaded {len(df)} rows from batch_results.csv")
 
     # ── Filter to valid rows ───────────────────────────────────────────────────
-    valid_magic = df[df["magic_score"] >= 0].copy()
-    valid_auto  = df[df["autoscore_holistic"] >= 0].copy()
+    valid_magic = df[df["magic_score"] >= 0].copy() if "magic_score" in df.columns else pd.DataFrame()
+    valid_auto  = df[df["autoscore_holistic"] >= 0].copy() if "autoscore_holistic" in df.columns else pd.DataFrame()
+    
+    valid_hybrid = pd.DataFrame()
+    failed_hybrid_count = 0
+    if "hybrid_score" in df.columns:
+        valid_hybrid = df[df["hybrid_score"] >= 0].copy()
+        
+        # Check if we have hybrid_srce_fields
+        if "hybrid_srce_fields" in df.columns:
+            failed_mask = df["hybrid_srce_fields"] == 0
+            failed_hybrid_count = failed_mask.sum()
+            valid_hybrid = valid_hybrid[~valid_hybrid["essay_id"].isin(df[failed_mask]["essay_id"])]
+        else:
+            # Fallback to the 8 known failed essay IDs from the Ollama run
+            known_failed = {
+                "AAAVUP14319000159461", "AAAVUP14319000159396", "AAAVUP14319000159373", 
+                "AAAVUP14319000159293", "AAAVUP14319000157959", "AAAVUP14319000157815", 
+                "AAAVUP14319000157200", "AAAVUP14319000156063"
+            }
+            # Only count/filter those actually present in the dataset
+            actual_failed = known_failed.intersection(set(valid_hybrid["essay_id"]))
+            failed_hybrid_count = len(actual_failed)
+            valid_hybrid = valid_hybrid[~valid_hybrid["essay_id"].isin(known_failed)]
 
-    print(f"  MAGIC valid rows    : {len(valid_magic)} / {len(df)}")
-    print(f"  AutoSCORE valid rows: {len(valid_auto)} / {len(df)}")
+    if len(valid_magic) > 0:
+        print(f"  MAGIC valid rows    : {len(valid_magic)} / {len(df)}")
+    if len(valid_auto) > 0:
+        print(f"  AutoSCORE valid rows: {len(valid_auto)} / {len(df)}")
+    if len(valid_hybrid) > 0:
+        print(f"  Hybrid valid rows   : {len(valid_hybrid)} / {len(df)}  (Filtered out {failed_hybrid_count} failed SRCE essays)")
 
     # ── Compute metrics ────────────────────────────────────────────────────────
     magic_metrics = None
     auto_metrics  = None
+    hybrid_metrics = None
 
     print("\n" + "=" * 65)
     print("  METRIC RESULTS")
@@ -248,15 +302,20 @@ def main():
     print(header)
     print("  " + "-" * 63)
 
-    if args.pipeline in ("both", "magic") and len(valid_magic) > 0:
+    if args.pipeline in ("both", "all", "magic") and len(valid_magic) > 0:
         magic_metrics = compute_metrics(valid_magic["human_score_norm"], valid_magic["magic_score"], "MAGIC")
         m = magic_metrics
         print(f"  {'MAGIC':<14} {m['n']:>5}  {m['qwk']:>7.3f}  {m['pearson_r']:>7.3f}  {m['mae']:>6.3f}  {m['exact_pct']:>8.1f}  {m['adj_pct']:>8.1f}  {m['mean_pred']:>9.2f}")
 
-    if args.pipeline in ("both", "autoscore") and len(valid_auto) > 0:
+    if args.pipeline in ("both", "all", "autoscore") and len(valid_auto) > 0:
         auto_metrics = compute_metrics(valid_auto["human_score_norm"], valid_auto["autoscore_holistic"], "AutoSCORE")
         m = auto_metrics
         print(f"  {'AutoSCORE':<14} {m['n']:>5}  {m['qwk']:>7.3f}  {m['pearson_r']:>7.3f}  {m['mae']:>6.3f}  {m['exact_pct']:>8.1f}  {m['adj_pct']:>8.1f}  {m['mean_pred']:>9.2f}")
+
+    if args.pipeline in ("all", "hybrid") and len(valid_hybrid) > 0:
+        hybrid_metrics = compute_metrics(valid_hybrid["human_score_norm"], valid_hybrid["hybrid_score"], "Hybrid")
+        m = hybrid_metrics
+        print(f"  {'Hybrid':<14} {m['n']:>5}  {m['qwk']:>7.3f}  {m['pearson_r']:>7.3f}  {m['mae']:>6.3f}  {m['exact_pct']:>8.1f}  {m['adj_pct']:>8.1f}  {m['mean_pred']:>9.2f}")
 
     print(f"\n  Human mean score: {df['human_score_norm'].mean():.2f}  (std: {df['human_score_norm'].std():.2f})")
     print("=" * 65)
@@ -274,15 +333,20 @@ def main():
         print(f"  MAGIC    : {magic_metrics['qwk']:.3f} → {interpret_qwk(magic_metrics['qwk'])}")
     if auto_metrics:
         print(f"  AutoSCORE: {auto_metrics['qwk']:.3f} → {interpret_qwk(auto_metrics['qwk'])}")
+    if hybrid_metrics:
+        print(f"  Hybrid   : {hybrid_metrics['qwk']:.3f} → {interpret_qwk(hybrid_metrics['qwk'])}")
 
     # Winner
-    if magic_metrics and auto_metrics:
-        winner = "MAGIC" if magic_metrics["qwk"] > auto_metrics["qwk"] else "AutoSCORE"
-        delta  = abs(magic_metrics["qwk"] - auto_metrics["qwk"])
-        print(f"\n  🏆 Higher QWK: {winner} (by {delta:.3f})")
+    active_metrics = [m for m in [magic_metrics, auto_metrics, hybrid_metrics] if m is not None]
+    if len(active_metrics) > 1:
+        sorted_m = sorted(active_metrics, key=lambda x: x["qwk"], reverse=True)
+        winner = sorted_m[0]["pipeline"]
+        second = sorted_m[1]["pipeline"]
+        delta = sorted_m[0]["qwk"] - sorted_m[1]["qwk"]
+        print(f"\n  🏆 Higher QWK: {winner} (beats {second} by {delta:.3f})")
 
     # ── Save metrics CSV ───────────────────────────────────────────────────────
-    metrics_rows = [m for m in [magic_metrics, auto_metrics] if m is not None]
+    metrics_rows = [m for m in [magic_metrics, auto_metrics, hybrid_metrics] if m is not None]
     if metrics_rows:
         metrics_df = pd.DataFrame(metrics_rows)
         metrics_path = os.path.join(BATCH_DIR, "results", f"metrics_summary{tag}.csv")
@@ -294,22 +358,32 @@ def main():
 
     BG = "#0d0d1a"
 
-    # --- Plot 1: 2×2 grid (scatter + confusion for each pipeline) ---
-    if magic_metrics and auto_metrics:
-        fig = plt.figure(figsize=(16, 14), facecolor=BG)
-        gs  = gridspec.GridSpec(2, 2, hspace=0.4, wspace=0.35)
+    # Identify active pipelines
+    active_pipelines = []
+    if magic_metrics:
+        active_pipelines.append(("MAGIC", valid_magic, "magic_score", BLUE, magic_metrics))
+    if auto_metrics:
+        active_pipelines.append(("AutoSCORE", valid_auto, "autoscore_holistic", GREEN, auto_metrics))
+    if hybrid_metrics:
+        active_pipelines.append(("Hybrid", valid_hybrid, "hybrid_score", RED, hybrid_metrics))
 
-        ax1 = fig.add_subplot(gs[0, 0]); ax1.set_facecolor(BG)
-        ax2 = fig.add_subplot(gs[0, 1]); ax2.set_facecolor(BG)
-        ax3 = fig.add_subplot(gs[1, 0]); ax3.set_facecolor(BG)
-        ax4 = fig.add_subplot(gs[1, 1]); ax4.set_facecolor(BG)
+    # --- Plot 1: Grid (scatter + confusion for each active pipeline) ---
+    if len(active_pipelines) >= 2:
+        cols = len(active_pipelines)
+        fig = plt.figure(figsize=(8 * cols, 14), facecolor=BG)
+        gs  = gridspec.GridSpec(2, cols, hspace=0.4, wspace=0.35)
 
-        plot_scatter(ax1, valid_magic["human_score_norm"], valid_magic["magic_score"],         "MAGIC",     BLUE,  magic_metrics)
-        plot_scatter(ax2, valid_auto["human_score_norm"],  valid_auto["autoscore_holistic"],    "AutoSCORE", GREEN, auto_metrics)
-        plot_confusion_hm(ax3, valid_magic["human_score_norm"], valid_magic["magic_score"],        "MAGIC",     BLUE)
-        plot_confusion_hm(ax4, valid_auto["human_score_norm"],  valid_auto["autoscore_holistic"],  "AutoSCORE", GREEN)
+        for idx, (name, df_val, col_name, color, m) in enumerate(active_pipelines):
+            ax_scat = fig.add_subplot(gs[0, idx])
+            ax_scat.set_facecolor(BG)
+            ax_conf = fig.add_subplot(gs[1, idx])
+            ax_conf.set_facecolor(BG)
 
-        fig.suptitle("MAGIC vs AutoSCORE — ASAP-100 Batch Evaluation",
+            plot_scatter(ax_scat, df_val["human_score_norm"], df_val[col_name], name, color, m)
+            plot_confusion_hm(ax_conf, df_val["human_score_norm"], df_val[col_name], name, color)
+
+        title_names = " vs ".join([name for name, _, _, _, _ in active_pipelines])
+        fig.suptitle(f"{title_names} — ASAP-100 Batch Evaluation",
                      fontsize=16, fontweight="bold", color="white", y=0.98)
 
         out1 = os.path.join(PLOTS_DIR, f"scatter_confusion{tag}.png")
@@ -322,10 +396,11 @@ def main():
         ax_bar.set_facecolor(BG)
         ax_dist.set_facecolor(BG)
 
-        plot_metric_bars(ax_bar, magic_metrics, auto_metrics)
+        metrics_dict = {name: m for name, _, _, _, m in active_pipelines}
+        plot_metric_bars(ax_bar, metrics_dict)
         plot_score_distribution(ax_dist, df)
 
-        fig2.suptitle("MAGIC vs AutoSCORE — Metric Summary & Distributions",
+        fig2.suptitle(f"{title_names} — Metric Summary & Distributions",
                       fontsize=14, fontweight="bold", color="white", y=1.02)
 
         out2 = os.path.join(PLOTS_DIR, f"metrics_and_distributions{tag}.png")
@@ -333,23 +408,14 @@ def main():
         plt.close(fig2)
         print(f"  Plot saved → {out2}")
 
-    elif magic_metrics:
+    elif len(active_pipelines) == 1:
+        name, df_val, col_name, color, m = active_pipelines[0]
         # single pipeline plot
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5), facecolor=BG)
         ax1.set_facecolor(BG); ax2.set_facecolor(BG)
-        plot_scatter(ax1, valid_magic["human_score_norm"], valid_magic["magic_score"], "MAGIC", BLUE, magic_metrics)
-        plot_confusion_hm(ax2, valid_magic["human_score_norm"], valid_magic["magic_score"], "MAGIC", BLUE)
-        out = os.path.join(PLOTS_DIR, f"magic_analysis{tag}.png")
-        fig.savefig(out, bbox_inches="tight", facecolor=BG, dpi=150)
-        plt.close(fig)
-        print(f"\n  Plot saved → {out}")
-
-    elif auto_metrics:
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5), facecolor=BG)
-        ax1.set_facecolor(BG); ax2.set_facecolor(BG)
-        plot_scatter(ax1, valid_auto["human_score_norm"], valid_auto["autoscore_holistic"], "AutoSCORE", GREEN, auto_metrics)
-        plot_confusion_hm(ax2, valid_auto["human_score_norm"], valid_auto["autoscore_holistic"], "AutoSCORE", GREEN)
-        out = os.path.join(PLOTS_DIR, f"autoscore_analysis{tag}.png")
+        plot_scatter(ax1, df_val["human_score_norm"], df_val[col_name], name, color, m)
+        plot_confusion_hm(ax2, df_val["human_score_norm"], df_val[col_name], name, color)
+        out = os.path.join(PLOTS_DIR, f"{name.lower()}_analysis{tag}.png")
         fig.savefig(out, bbox_inches="tight", facecolor=BG, dpi=150)
         plt.close(fig)
         print(f"\n  Plot saved → {out}")

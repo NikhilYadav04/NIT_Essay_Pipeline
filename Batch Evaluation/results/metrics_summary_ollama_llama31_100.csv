@@ -1,0 +1,2 @@
+pipeline,n,qwk,pearson_r,mae,exact_pct,adj_pct,mean_pred,std_pred,mean_human
+Hybrid,92,0.416,0.467,0.772,45.7,82.6,2.35,0.8,2.29

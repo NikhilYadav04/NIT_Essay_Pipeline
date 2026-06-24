@@ -4,12 +4,13 @@
 
 This repository contains the current progress for the Essay Scoring System. The project investigates whether multi-agent LLM architectures can produce accurate, interpretable, and rubric-aligned essay scores comparable to human graders.
 
-Two pipeline architectures are implemented and benchmarked:
+Three pipeline architectures are implemented and benchmarked:
 
 | Pipeline | Architecture | Scoring Strategy |
 |---|---|---|
 | **MAGIC Pipeline** | Multi-Agent Graph with 5 specialist agents + 1 orchestrator | Parallel per-dimension scoring → holistic synthesis |
 | **AutoScore Pipeline** | Single LangGraph agent with structured rubric prompting | End-to-end single-pass scoring |
+| **Hybrid Pipeline** | SRCE evidence extraction → 5 MAGIC agents → orchestrator | Evidence-anchored parallel scoring |
 
 ---
 
@@ -19,6 +20,7 @@ Two pipeline architectures are implemented and benchmarked:
 NIT_Essay_Pipeline/
 ├── Magic Pipeline/          # Multi-Agent Intelligent Grading & Critique (MAGIC)
 ├── AutoScore Pipeline/      # Single-agent AutoScore baseline
+├── Hybrid Pipeline/         # Evidence-anchored hybrid (SRCE + MAGIC agents)
 ├── Batch Evaluation/        # Automated benchmarking and metric analysis
 ├── Datasets/                # Essay datasets used for evaluation
 └── Docs Research/           # Research papers and project documentation
@@ -147,6 +149,52 @@ Unlike MAGIC's parallel agents, AutoScore performs a single holistic evaluation 
 
 ---
 
+## Hybrid Pipeline
+
+**Architecture:** A third prototype combining both approaches — AutoScore's SRCE agent extracts a structured evidence map first, which is then injected into each of MAGIC's 5 specialist agents before scoring.
+
+### How It Works
+
+```
+Essay Input
+    │
+    ▼
+[Stage 1] SRCE Agent (AutoSCORE)
+    Extracts structured JSON evidence record (no scores, just facts)
+    │
+    ▼
+[Stage 2] 5 MAGIC Agents — run in PARALLEL
+    Each agent receives: individual rubric + SRCE evidence JSON + essay
+    Each outputs: score (0–6) + detailed examiner comment
+    │
+    ▼
+[Stage 3] Orchestrator (MAGIC)
+    Synthesises all 5 scores → final holistic score + consolidated feedback
+
+Total LLM calls per essay: 7  (1 SRCE + 5 agents + 1 orchestrator)
+```
+
+### Why Hybrid
+
+| Pipeline | QWK | Feedback |
+|---|---|---|
+| AutoSCORE | 0.410 | Thin (holistic only) |
+| MAGIC | 0.396 | Rich (per-trait) |
+| **Hybrid (predicted)** | **> 0.410** | **Rich (per-trait, evidence-anchored)** |
+
+### Key Files
+
+| File | Purpose |
+|---|---|
+| `hybrid_graph.py` | Main LangGraph pipeline — 3-stage: SRCE → agents → orchestrator |
+| `llm_client.py` | Merged LLM client (Gemini + Ollama) |
+| `prompts/agents.py` | MAGIC agent prompts modified to accept SRCE evidence JSON |
+| `prompts/srce_prompt.py` | SRCE evidence extraction prompt (from AutoScore) |
+| `prompts/orchestrator.py` | Orchestrator synthesis prompt (unchanged from MAGIC) |
+| `display.py` | Rich terminal display |
+
+---
+
 ## Batch Evaluation
 
 Automated benchmarking suite for running both pipelines at scale and computing agreement metrics against human gold-standard scores.
@@ -169,7 +217,10 @@ python batch_runner.py --backend ollama --model llama3.1:8b --pipeline autoscore
 |---|---|
 | `batch_runner.py` | Main benchmarking runner — iterates dataset, calls pipeline, logs results |
 | `analyze.py` | Metric computation: QWK, Pearson r, MSE, score distributions |
-| `prepare_data.py` | Dataset preprocessing and formatting for pipeline input |
+| `prepare_balanced.py` | Stratified sampling — creates balanced 100-essay dataset from ASAP-2 |
+| `prepare_1000.py` | Stratified sampling — creates balanced 1000-essay dataset from ASAP-2 |
+| `prepare_finetune.py` | Prepares balanced 1500-essay fine-tuning dataset (Kaggle-ready JSON) |
+| `data/` | Input datasets: `asap_balanced_100.csv`, `asap_balanced_1000.csv` |
 | `results/` | Output CSVs, metric summaries, and comparison reports |
 
 ### Metrics Computed
@@ -189,13 +240,16 @@ Reference papers and project documentation used throughout the research.
 
 | Document | Description |
 |---|---|
-| `MAGIC_Paper.pdf` | Original MAGIC multi-agent AES paper (primary reference) |
-| `AutoScore_Paper.pdf` | AutoScore methodology paper (baseline reference) |
+| `Research Paper/MAGIC_Paper.pdf` | Original MAGIC multi-agent AES paper (primary reference) |
+| `Research Paper/AutoScore_Paper.pdf` | AutoScore methodology paper (baseline reference) |
+| `Research Paper/Research_Survey.pdf` | RES (Roundtable Essay Scoring) methodology paper (baseline reference) |
 | `LLM_Strict_Grading_Research.pdf` | Research on strict rubric-following in LLM graders |
-| `Research_Survey.pdf` | RES ( Roundtable Essay Scoring ) methodology paper (baseline reference) |
-| `MAGIC_Pipeline_AES_Report.docx` | Deep Analysis of MAGIC on various LLM Models |
+| `MAGIC_Pipeline_AES_Report.docx` | Deep analysis of MAGIC on various LLM models |
 | `MAGIC_vs_AutoScore_Comparison.docx` | Comparative analysis of both architectures |
 | `Essay_Evaluation_Pipeline_Overview.docx` | High-level pipeline design documentation |
+| `Hybrid/Essay_Scoring_Debug_Hybrid_Report.docx` | Debugging and analysis report for the Hybrid pipeline |
+| `Hybrid/Hybrid_Architecture_Analysis.docx` | Architecture design analysis for the Hybrid pipeline |
+| `Hybrid/Hybrid_Performance_Analysis_380.docx` | Performance analysis of Hybrid pipeline (380-essay run) |
 
 ---
 
@@ -207,13 +261,14 @@ Essay datasets used to benchmark both pipelines against human gold-standard scor
 |---|---|---|---|
 | `ASAP_100.csv` | 100 | ASAP (Automated Student Assessment Prize) | Short student essays, multiple prompts |
 | `GRE_100.csv` | 100 | GRE Analytical Writing dataset | Long-form argumentative essays |
+| `ASAP2_train_sourcetexts.csv` | Full set | ASAP-2 training split with source texts | Multi-prompt, includes source passage context |
 
-Both datasets contain:
+All datasets contain:
 - **Essay text** — the full student essay
 - **Human score** — gold-standard score assigned by trained human graders (0–6 scale)
 - **Prompt** — the essay question/task the student responded to
 
-These are used by the **Batch Evaluation** pipeline to compute QWK and other agreement metrics between LLM-predicted scores and human scores.
+These are used by the **Batch Evaluation** pipeline to compute QWK and other agreement metrics between LLM-predicted scores and human scores. The `prepare_*.py` scripts in `Batch Evaluation/` sample from `ASAP2_train_sourcetexts.csv` to create stratified subsets.
 
 ---
 

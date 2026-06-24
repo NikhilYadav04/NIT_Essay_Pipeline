@@ -27,6 +27,14 @@ env/
 Batch Evaluation/results/plots/
 Batch Evaluation/results/trial_log.jsonl
 Batch Evaluation/results/run_log.txt
+Kaggle
+Batch Evaluation/.claude/
+Batch Evaluation/data/finetune_1500.json
+Batch Evaluation/finetune_kaggle.ipynb
+Batch Evaluation/finetune_kaggle.py
+Batch Evaluation/log.txt
+Batch Evaluation/parse_log.py
+Magic Prototype/
 
 # Folders NOT part of this repo
 ocr_pipeline/
@@ -48,3 +56,6 @@ Thumbs.db
 .idea/
 *.suo
 *.user
+
+Batch Evaluation/run.md
+handover.md

@@ -51,6 +51,7 @@ ROOT       = os.path.dirname(BATCH_DIR)  # n:\Dev\Summer Intern
 
 MAGIC_DIR        = os.path.join(ROOT, "Magic Prototype")
 AUTOSCORE_DIR    = os.path.join(ROOT, "AutoScore Pipeline")
+HYBRID_DIR       = os.path.join(ROOT, "Hybrid Pipeline")
 AUTOSCORE_SHARED = os.path.join(AUTOSCORE_DIR, "shared")
 
 # NOTE: We do NOT add MAGIC_DIR or AUTOSCORE_DIR to sys.path globally because
@@ -59,8 +60,8 @@ AUTOSCORE_SHARED = os.path.join(AUTOSCORE_DIR, "shared")
 # relative imports resolve correctly.
 sys.path.insert(0, AUTOSCORE_SHARED)   # shared llm_client only
 
-# ── File paths ─────────────────────────────────────────────────────────────────
-DATA_FILE    = os.path.join(BATCH_DIR, "data", "asap_clean.csv")
+# ── File paths (DATA_FILE is resolved at runtime from --data arg) ────────────────────
+DEFAULT_DATA = os.path.join(BATCH_DIR, "data", "asap_clean.csv")
 RESULTS_FILE = os.path.join(BATCH_DIR, "results", "batch_results.csv")
 TRIAL_LOG    = os.path.join(BATCH_DIR, "results", "trial_log.jsonl")   # full per-essay log
 LOG_FILE     = os.path.join(BATCH_DIR, "results", "run_log.txt")        # lightweight event log
@@ -121,7 +122,10 @@ RESULT_COLS = [
     "autoscore_holistic", "autoscore_trait1", "autoscore_trait2",
     "autoscore_trait3", "autoscore_trait4", "autoscore_trait5",
     "autoscore_error",
-    "magic_duration_sec", "autoscore_duration_sec",
+    "hybrid_score", "hybrid_trait1", "hybrid_trait2",
+    "hybrid_trait3", "hybrid_trait4", "hybrid_trait5",
+    "hybrid_error", "hybrid_srce_fields",
+    "magic_duration_sec", "autoscore_duration_sec", "hybrid_duration_sec",
     "timestamp",
 ]
 
@@ -194,6 +198,37 @@ def run_autoscore(autoscore_app, essay_text: str, essay_prompt: str) -> tuple:
         return {}, {}, str(e)[:300], 0.0
 
 
+# ── Hybrid invocation ──────────────────────────────────────────────────────────
+
+def run_hybrid(hybrid_app, essay_text: str, essay_prompt: str) -> tuple:
+    """
+    Returns (orchestrator_score, agent_results_list, error_message, duration_sec, evidence_dict).
+    orchestrator_score = -1 on error, agent_results_list = [] on error.
+    """
+    try:
+        t0 = time.time()
+        final_state = hybrid_app.invoke({
+            "essay_text":         essay_text,
+            "essay_prompt":       essay_prompt,
+            "rubric":             ASAP_RUBRIC,
+            "evidence_dict":      {},
+            "evidence_json":      "",
+            "agent_results":      [],
+            "orchestrator_score": 0,
+            "final_feedback":     "",
+        })
+        duration = round(time.time() - t0, 1)
+        score  = final_state.get("orchestrator_score", -1)
+        agents = sorted(
+            final_state.get("agent_results", []),
+            key=lambda r: r.get("agent_index", 0)
+        )
+        evidence = final_state.get("evidence_dict", {})
+        return score, agents, "", duration, evidence
+    except Exception as e:
+        return -1, [], str(e)[:300], 0.0, {}
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def extract_autoscore_traits(scoring_dict: dict) -> dict:
@@ -250,14 +285,17 @@ def parse_args():
                         help="Model override (default: ollama→llama3.1:8b  gemini→gemini-2.5-flash)")
     parser.add_argument("--orchestrator-model", type=str, default=None, dest="orchestrator_model",
                         help="Separate model for orchestrator (default: gemini-2.5-pro for gemini backend)")
-    parser.add_argument("--pipeline", choices=["both", "magic", "autoscore"], default="both",
-                        help="Which pipeline(s) to run (default: both)")
+    parser.add_argument("--pipeline", choices=["both", "magic", "autoscore", "hybrid", "all"], default="both",
+                        help="Which pipeline(s) to run (default: both runs MAGIC and AutoSCORE, all runs all three)")
     parser.add_argument("--limit",    type=int, default=None,
                         help="Evaluate only the first N essays (for quick testing)")
     parser.add_argument("--rubric",   choices=["gre", "asap"], default="gre",
                         help="MAGIC rubric variant: gre (5 agents) or asap (3 agents, default: gre)")
     parser.add_argument("--resume",   action="store_true",
                         help="Skip essays that are already in batch_results.csv")
+    parser.add_argument("--data",     type=str, default=None,
+                        help="Path to dataset CSV (default: data/asap_clean.csv). "
+                             "Filename only (e.g. asap_balanced_100.csv) looks in data/ dir.")
     parser.add_argument("--sleep",    type=float, default=1.0,
                         help="Seconds to sleep between pipeline calls (default: 1 for Ollama)")
     return parser.parse_args()
@@ -289,9 +327,18 @@ def main():
     os.makedirs(os.path.join(BATCH_DIR, "results"), exist_ok=True)
 
     # ── Load dataset ───────────────────────────────────────────────────────────
+    # ── Resolve dataset path ─────────────────────────────────────────────────────
+    if args.data is None:
+        DATA_FILE = DEFAULT_DATA
+    elif os.path.isabs(args.data):
+        DATA_FILE = args.data
+    else:
+        # Allow short filename like "asap_balanced_100.csv"
+        DATA_FILE = os.path.join(BATCH_DIR, "data", args.data)
+
     if not os.path.exists(DATA_FILE):
-        print(f"[ERROR] Clean dataset not found: {DATA_FILE}")
-        print("  Run prepare_data.py first.")
+        print(f"[ERROR] Dataset not found: {DATA_FILE}")
+        print("  Run prepare_data.py or prepare_balanced.py first.")
         sys.exit(1)
 
     df = pd.read_csv(DATA_FILE)
@@ -328,6 +375,7 @@ def main():
     # sys.modules so all internal calls use the right backend.
     magic_app      = None
     autoscore_app  = None
+    hybrid_app     = None
     _orig_cwd = os.getcwd()
 
     def _evict_prompts():
@@ -343,6 +391,8 @@ def main():
         _evict_prompts()
         # Also remove the graph module itself in case it was registered before
         sys.modules.pop(module_name, None)
+        # Evict llm_client so the correct one is loaded for each pipeline
+        sys.modules.pop("llm_client", None)
 
         sys.path.insert(0, project_dir)
         os.chdir(project_dir)
@@ -357,7 +407,7 @@ def main():
                 sys.path.remove(project_dir)
             os.chdir(_orig_cwd)
 
-    if args.pipeline in ("both", "magic"):
+    if args.pipeline in ("both", "all", "magic"):
         magic_module = _load_module_from_dir(
             "magic_graph",
             os.path.join(MAGIC_DIR, "magic_graph.py"),
@@ -370,7 +420,7 @@ def main():
         magic_app = magic_module.build_graph(rubric=args.rubric)
         print(f"[3a] MAGIC graph compiled ✓ (rubric={args.rubric})")
 
-    if args.pipeline in ("both", "autoscore"):
+    if args.pipeline in ("both", "all", "autoscore"):
         # Evict MAGIC's prompts before loading AutoSCORE's
         autoscore_module = _load_module_from_dir(
             "autoscore_graph",
@@ -382,6 +432,19 @@ def main():
             llm_mod.configure(backend=args.backend, model=model, api_key=api_key)
         autoscore_app = autoscore_module.build_graph()
         print("[3b] AutoSCORE graph compiled ✓")
+
+    if args.pipeline in ("all", "hybrid"):
+        # Load Hybrid graph
+        hybrid_module = _load_module_from_dir(
+            "hybrid_graph",
+            os.path.join(HYBRID_DIR, "hybrid_graph.py"),
+            HYBRID_DIR,
+        )
+        llm_mod = sys.modules.get("llm_client")
+        if llm_mod:
+            llm_mod.configure(backend=args.backend, model=model, api_key=api_key)
+        hybrid_app = hybrid_module.build_graph()
+        print("[3c] Hybrid graph compiled ✓")
 
     print()
 
@@ -419,8 +482,17 @@ def main():
             "autoscore_trait4":     -1,
             "autoscore_trait5":     -1,
             "autoscore_error":      "",
+            "hybrid_score":         -1,
+            "hybrid_trait1":        -1,
+            "hybrid_trait2":        -1,
+            "hybrid_trait3":        -1,
+            "hybrid_trait4":        -1,
+            "hybrid_trait5":        -1,
+            "hybrid_error":         "",
+            "hybrid_srce_fields":   -1,
             "magic_duration_sec":   0.0,
             "autoscore_duration_sec": 0.0,
+            "hybrid_duration_sec":  0.0,
             "timestamp":            datetime.now().isoformat(timespec="seconds"),
         }
 
@@ -456,13 +528,41 @@ def main():
 
             if err:
                 log(f"  Essay {essay_id}: AutoSCORE error — {err}", also_print=False)
-                print(f"AutoSCORE=ERR")
+                print(f"AutoSCORE=ERR  ", end="")
             else:
-                print(f"AutoSCORE={result_row['autoscore_holistic']}/6")
+                print(f"AutoSCORE={result_row['autoscore_holistic']}/6  ", end="")
 
             time.sleep(args.sleep)
-        else:
-            print()
+
+        # ── Hybrid ─────────────────────────────────────────────────────────────
+        hybrid_agents = []
+
+        if hybrid_app:
+            score, hybrid_agents, err, dur, evidence_dict = run_hybrid(hybrid_app, essay_text, prompt)
+            result_row["hybrid_score"]        = score
+            result_row["hybrid_error"]        = err
+            result_row["hybrid_duration_sec"] = dur
+
+            # Extract SRCE trait counts
+            trait_count = len([k for k in evidence_dict if k != "essay_metadata"])
+            result_row["hybrid_srce_fields"] = trait_count
+
+            if not err and len(hybrid_agents) == 5:
+                result_row["hybrid_trait1"] = hybrid_agents[0].get("score", -1)
+                result_row["hybrid_trait2"] = hybrid_agents[1].get("score", -1)
+                result_row["hybrid_trait3"] = hybrid_agents[2].get("score", -1)
+                result_row["hybrid_trait4"] = hybrid_agents[3].get("score", -1)
+                result_row["hybrid_trait5"] = hybrid_agents[4].get("score", -1)
+
+            if err:
+                log(f"  Essay {essay_id}: Hybrid error — {err}", also_print=False)
+                print(f"Hybrid=ERR", end="")
+            else:
+                print(f"Hybrid={score}/6", end="")
+
+            time.sleep(args.sleep)
+
+        print()
 
         results.append(result_row)
 
@@ -527,14 +627,39 @@ def main():
                 "error":        result_row["autoscore_error"],
             },
 
+            # ── Hybrid results ────────────────────────────────────────────────
+            "hybrid": {
+                "orchestrator_score": result_row["hybrid_score"],
+                "duration_sec":       result_row["hybrid_duration_sec"],
+                "error":              result_row["hybrid_error"],
+                "agents": [
+                    {
+                        "index":   a.get("agent_index"),
+                        "aspect":  a.get("aspect_name"),
+                        "type":    a.get("agent_type"),
+                        "score":   a.get("score"),
+                        "comment": a.get("examiner_comment", "")[:300],  # truncate long comments
+                    }
+                    for a in hybrid_agents
+                ],
+            },
+
             # ── Comparison delta ──────────────────────────────────────────────
             "delta": {
                 "magic_vs_human":     result_row["magic_score"] - h_norm
                                       if result_row["magic_score"] >= 0 else None,
                 "autoscore_vs_human": result_row["autoscore_holistic"] - h_norm
                                       if result_row["autoscore_holistic"] >= 0 else None,
+                "hybrid_vs_human":    result_row["hybrid_score"] - h_norm
+                                      if result_row["hybrid_score"] >= 0 else None,
                 "magic_vs_autoscore": result_row["magic_score"] - result_row["autoscore_holistic"]
                                       if (result_row["magic_score"] >= 0
+                                          and result_row["autoscore_holistic"] >= 0) else None,
+                "hybrid_vs_magic":    result_row["hybrid_score"] - result_row["magic_score"]
+                                      if (result_row["hybrid_score"] >= 0
+                                          and result_row["magic_score"] >= 0) else None,
+                "hybrid_vs_autoscore": result_row["hybrid_score"] - result_row["autoscore_holistic"]
+                                      if (result_row["hybrid_score"] >= 0
                                           and result_row["autoscore_holistic"] >= 0) else None,
             },
         }
@@ -549,8 +674,9 @@ def main():
     print("=" * 65)
     print(f"  Total essays scored : {len(final_df)}")
 
-    valid_magic = final_df[final_df["magic_score"] >= 0]
-    valid_auto  = final_df[final_df["autoscore_holistic"] >= 0]
+    valid_magic  = final_df[final_df["magic_score"] >= 0]
+    valid_auto   = final_df[final_df["autoscore_holistic"] >= 0]
+    valid_hybrid = final_df[final_df["hybrid_score"] >= 0]
 
     if len(valid_magic) > 0:
         magic_errors = len(final_df) - len(valid_magic)
@@ -559,6 +685,10 @@ def main():
     if len(valid_auto) > 0:
         auto_errors = len(final_df) - len(valid_auto)
         print(f"  AutoSCORE   : {len(valid_auto)} ok, {auto_errors} errors | Mean score: {valid_auto['autoscore_holistic'].mean():.2f}")
+
+    if len(valid_hybrid) > 0:
+        hybrid_errors = len(final_df) - len(valid_hybrid)
+        print(f"  Hybrid      : {len(valid_hybrid)} ok, {hybrid_errors} errors | Mean score: {valid_hybrid['hybrid_score'].mean():.2f}")
 
     print(f"\n  Results saved → {RESULTS_FILE}")
     print("  Next step: run analyze.py to compute QWK, Pearson, MAE\n")

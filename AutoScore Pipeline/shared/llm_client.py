@@ -165,7 +165,8 @@ def _call_ollama_raw(system_prompt: str, user_prompt: str, label: str) -> str:
                 "stream": False,
                 "options": {
                     "temperature": 0.1,    # very low — we want deterministic JSON
-                    "num_predict": 2048,   # large — evidence JSON can be 1k+ tokens
+                    "num_predict": 4096,   # increased for verbose models (Qwen2.5)
+                    "num_ctx": 32768,      # total context — qwen tokenizer needs more room
                 }
             },
             timeout=300,   # 5 min — larger models + large output
